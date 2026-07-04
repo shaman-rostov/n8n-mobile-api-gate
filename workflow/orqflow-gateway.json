@@ -1,0 +1,385 @@
+{
+  "name": "Orqflow Mobile API Gateway",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mobile-api-gate",
+        "authentication": "basicAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        320
+      ],
+      "id": "a3c4fe97-79a5-4bb1-86e2-25072379cdd8",
+      "name": "Webhook Gateway"
+    },
+    {
+      "parameters": {
+        "jsCode": "const EXPECTED_TOKEN = $json.gatewayToken || 'change-me';\nconst BASE_URL = ($json.instanceUrl || 'http://localhost:5678').replace(/\\/+$/, '') + '/api/v1';\nconst n8nApiKey = $json.n8nApiKey || '';\n\nconst headers = $json.headers || {};\nconst body = $json.body || {};\nconst action = (body.action || '').trim();\nconst params = body.params || {};\nconst apiKey = headers['x-api-key'] || headers['X-API-Key'] || headers['X-api-key'] || '';\n\nif (apiKey !== EXPECTED_TOKEN) {\n  return [{ json: { action_type: 'error', status: 401, success: false, error: 'Unauthorized', message: 'Invalid or missing X-API-Key header' } }];\n}\n\nconst B = BASE_URL;\nfunction cleanQs(obj) {\n  return Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined && v !== null && v !== ''));\n}\n\nconst actionDefs = {\n  list_workflows: () => ({ method: 'GET', url: B + '/workflows', qs: cleanQs({ active: params.active, limit: params.limit || 100, cursor: params.cursor, tags: params.tags }) }),\n  get_workflow: () => ({ method: 'GET', url: B + '/workflows/' + params.workflowId }),\n  create_workflow: () => ({ method: 'POST', url: B + '/workflows', body: params.workflow || {} }),\n  update_workflow: () => ({ method: 'PUT', url: B + '/workflows/' + params.workflowId, body: params.workflow || {} }),\n  delete_workflow: () => ({ method: 'DELETE', url: B + '/workflows/' + params.workflowId }),\n  activate_workflow: () => ({ method: 'POST', url: B + '/workflows/' + params.workflowId + '/activate' }),\n  deactivate_workflow: () => ({ method: 'POST', url: B + '/workflows/' + params.workflowId + '/deactivate' }),\n  trigger_workflow: () => ({ method: 'POST', url: B + '/workflows/' + params.workflowId + '/run', body: params.data ? { data: params.data } : {} }),\n  list_executions: () => ({ method: 'GET', url: B + '/executions', qs: cleanQs({ workflowId: params.workflowId, status: params.status, limit: params.limit || 20, cursor: params.cursor, includeData: params.includeData }) }),\n  get_execution: () => ({ method: 'GET', url: B + '/executions/' + params.executionId }),\n  delete_execution: () => ({ method: 'DELETE', url: B + '/executions/' + params.executionId }),\n  stop_execution: () => ({ method: 'POST', url: B + '/executions/' + params.executionId + '/stop' }),\n  list_credentials: () => ({ method: 'GET', url: B + '/credentials', qs: cleanQs({ limit: params.limit || 100, cursor: params.cursor }) }),\n  create_credential: () => ({ method: 'POST', url: B + '/credentials', body: params }),\n  delete_credential: () => ({ method: 'DELETE', url: B + '/credentials/' + params.credentialId }),\n  list_variables: () => ({ method: 'GET', url: B + '/variables', qs: cleanQs({ limit: params.limit || 100, cursor: params.cursor }) }),\n  create_variable: () => ({ method: 'POST', url: B + '/variables', body: { key: params.key, value: params.value } }),\n  delete_variable: () => ({ method: 'DELETE', url: B + '/variables/' + params.variableId }),\n  list_tags: () => ({ method: 'GET', url: B + '/tags', qs: cleanQs({ limit: params.limit || 100, cursor: params.cursor }) }),\n  create_tag: () => ({ method: 'POST', url: B + '/tags', body: { name: params.name } }),\n  update_tag: () => ({ method: 'PUT', url: B + '/tags/' + params.tagId, body: { name: params.name } }),\n  delete_tag: () => ({ method: 'DELETE', url: B + '/tags/' + params.tagId }),\n  list_users: () => ({ method: 'GET', url: B + '/users', qs: cleanQs({ limit: params.limit || 100, cursor: params.cursor }) }),\n  generate_audit: () => ({ method: 'POST', url: B + '/audit', body: params.additionalData ? { additionalData: params.additionalData } : {} }),\n  list_projects: () => ({ method: 'GET', url: B + '/projects', qs: cleanQs({ limit: params.limit || 100, cursor: params.cursor }) }),\n  pull_source_control: () => ({ method: 'POST', url: B + '/source-control/pull', body: { force: params.force || false } }),\n  push_source_control: () => ({ method: 'POST', url: B + '/source-control/push', body: { message: params.message || 'Update from mobile app', force: params.force || false } }),\n};\n\nconst allActions = Object.keys(actionDefs).concat(['get_system_info', 'list_endpoints']);\n\nif (action === 'get_system_info') {\n  return [{ json: { action_type: 'system_info' } }];\n}\n\nif (action === 'list_endpoints') {\n  return [{ json: { action_type: 'success', success: true, action: 'list_endpoints', data: { total: allActions.length, endpoints: allActions, categories: { workflows: ['list_workflows','get_workflow','create_workflow','update_workflow','delete_workflow','activate_workflow','deactivate_workflow','trigger_workflow'], executions: ['list_executions','get_execution','delete_execution','stop_execution'], credentials: ['list_credentials','create_credential','delete_credential'], variables: ['list_variables','create_variable','delete_variable'], tags: ['list_tags','create_tag','update_tag','delete_tag'], users: ['list_users'], audit: ['generate_audit'], projects: ['list_projects'], source_control: ['pull_source_control','push_source_control'], meta: ['get_system_info','list_endpoints'] } } } }];\n}\n\nconst defFn = actionDefs[action];\nif (!defFn) {\n  return [{ json: { action_type: 'error', success: false, status: 400, error: 'Unknown action', message: 'Action \"' + action + '\" not supported. Call list_endpoints for all available actions.', available_actions: allActions } }];\n}\n\nconst cfg = defFn();\nconst bodyData = cfg.body || {};\nconst qsData = cfg.qs || {};\nconst hasBody = Object.keys(bodyData).length > 0;\nconst hasQs = Object.keys(qsData).length > 0;\n\nreturn [{ json: { action_type: 'api_call', action, method: cfg.method, url: cfg.url, bodyData, qsData, hasBody, hasQs, n8nApiKey } }];"
+      },
+      "id": "0ecbacd7-72bf-485e-8697-dec53b78f271",
+      "name": "Map Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action_type }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "api_call",
+                    "id": "abfca4cf-f71d-49ee-9e85-5f32460fb1bf"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "api_call"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action_type }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "system_info",
+                    "id": "113eed2a-eadd-414c-bb53-2aff1e085031"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "system_info"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action_type }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "success",
+                    "id": "d7ec0538-4c7b-47e5-aeb6-95b6ce65c814"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "success"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "error"
+        }
+      },
+      "id": "0ddf74f7-f148-4556-883d-fbbc3e615613",
+      "name": "Route by Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -256,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.method }}",
+        "url": "={{ $json.url }}",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "={{ JSON.stringify($json.qsData) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "={{ $json.n8nApiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.bodyData) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "f9137ebc-8708-47a1-a7b5-28ebb757c6ed",
+      "name": "n8n REST API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const apiData = $input.first().json;\nconst req = $('Map Action').first().json;\nconst hasError = apiData.message && (apiData.code >= 400 || apiData.httpCode >= 400);\n\n// n8n API list responses: { data: [...], nextCursor }\n// unwrap to avoid double nesting\nlet responseData;\nif (Array.isArray(apiData.data)) {\n  responseData = {\n    items: apiData.data,\n    total: apiData.data.length,\n    nextCursor: apiData.nextCursor || null\n  };\n} else {\n  responseData = apiData;\n}\n\nreturn [{ json: { success: !hasError, action: req.action, data: responseData } }];"
+      },
+      "id": "004e2ecf-1288-4bf7-aa09-c1bda75e2d99",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { success: true, action: 'get_system_info', data: { instance_url: ($('⚙️ Config').first().json.instanceUrl || 'http://localhost:5678').replace(/\\/+$/, ''), api_base: ($('⚙️ Config').first().json.instanceUrl || 'http://localhost:5678').replace(/\\/+$/, '') + '/api/v1', api_version: 'v1', timestamp: new Date().toISOString(), environment: $execution.mode, workflow_id: $workflow.id, workflow_name: $workflow.name, execution_id: $execution.id, total_endpoints: 29 } } }];"
+      },
+      "id": "410c91aa-42ea-4736-b011-020fe30debbd",
+      "name": "System Info Builder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "da05642a-de70-46db-a8bb-b6e39889994b",
+      "name": "Respond 2xx",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        768,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": "={{ $json.status || 400 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "198146d2-192d-4c57-9039-052a4c099e94",
+      "name": "Respond 4xx",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-gateway-token",
+              "name": "gatewayToken",
+              "value": "CHANGE_ME — run: openssl rand -hex 32",
+              "type": "string"
+            },
+            {
+              "id": "cfg-n8n-api-key",
+              "name": "n8nApiKey",
+              "value": "CHANGE_ME — n8n Settings → API → Create API key",
+              "type": "string"
+            },
+            {
+              "id": "cfg-instance-url",
+              "name": "instanceUrl",
+              "value": "http://localhost:5678",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "f0b2ac1e-0e3d-4fbf-bd6d-06695a9f6c88",
+      "name": "⚙️ Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -608,
+        320
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Map Action": {
+      "main": [
+        [
+          {
+            "node": "Route by Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Type": {
+      "main": [
+        [
+          {
+            "node": "n8n REST API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "System Info Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 2xx",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 4xx",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "n8n REST API": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond 2xx",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "System Info Builder": {
+      "main": [
+        [
+          {
+            "node": "Respond 2xx",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Gateway": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Config": {
+      "main": [
+        [
+          {
+            "node": "Map Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "tags": []
+}
