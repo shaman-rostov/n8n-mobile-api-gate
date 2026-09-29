@@ -76,7 +76,6 @@ Tap **Test Connection** → **Save**.
 | `get_workflow` | Single workflow details |
 | `activate_workflow` | Toggle workflow on |
 | `deactivate_workflow` | Toggle workflow off |
-| `trigger_workflow` | Run a workflow manually |
 | `list_executions` | Paginated execution history |
 | `get_execution` | Single execution details |
 | `stop_execution` | Stop a running execution |
