@@ -5,7 +5,6 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "mobile-api-gate",
-        "authentication": "basicAuth",
         "responseMode": "responseNode",
         "options": {}
       },
