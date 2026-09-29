@@ -37,15 +37,13 @@ Open the **⚙️ Config** node and fill in three fields:
 
 > **Copy `gatewayToken`** — you'll paste it into the Orqflow iOS app.
 
-### Step 3 — Set up Basic Auth credential (optional)
+### Step 3 — Add HTTP Basic Auth (optional)
 
-If you protect your n8n with HTTP Basic Auth:
+The webhook is protected by `gatewayToken` out of the box. If you also want HTTP Basic Auth on it:
 
-1. In n8n: **Settings → Credentials → Add credential → HTTP Basic Auth**
-2. Name it `n8n API Basic Auth`, enter your username/password
-3. Open the **Webhook Gateway** node → select that credential
-
-If you don't use Basic Auth, remove the `authentication: basicAuth` from the Webhook Gateway node.
+1. In n8n: **Settings → Credentials → Add credential → HTTP Basic Auth**, enter a username/password
+2. Open the **Webhook Gateway** node → **Authentication: Basic Auth** → select that credential
+3. Enter the same username/password in the Orqflow app (Basic Auth fields)
 
 ### Step 4 — Activate
 
