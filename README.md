@@ -111,8 +111,15 @@ Expected: `{"success":true,"action":"list_endpoints","data":{...}}`
 - Verify `n8nApiKey` is valid (Settings → API in n8n)
 - Check `instanceUrl` in ⚙️ Config points to the correct n8n address (reachable from within n8n itself)
 
+**"The n8n API key in the ⚙️ Config node is invalid or expired"**
+- The gateway reached n8n, but n8n rejected `n8nApiKey`. Create a new key in n8n (Settings → API) and paste it into ⚙️ Config
+
 **n8n runs in Docker**
 - Set `instanceUrl` to the internal container address, e.g. `http://n8n:5678`
+
+**Do not turn off saving for the gateway's executions**
+- Keep "Save successful production executions" at its default for this workflow. On n8n 2.x, with saving disabled, every request leaves an execution stuck in `running` that is never closed; thousands of them make n8n run out of memory on startup while it tries to recover them
+- The app hides the gateway's own executions, and n8n prunes old ones (`EXECUTIONS_DATA_MAX_AGE`)
 
 ---
 
