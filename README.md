@@ -9,8 +9,15 @@ The gateway is a single n8n workflow that:
 2. Validates the request with a secret `gatewayToken` (`X-API-Key` header)
 3. Routes `action` commands to n8n's internal REST API
 4. Returns structured JSON responses to the iOS app
+5. After answering, prunes its own past runs from the execution history (see below)
 
 Your credentials never leave your server — the app talks only to your own n8n instance.
+
+### Execution history
+
+Every app request is saved by n8n as an execution of the gateway workflow. The app hides them, but they would pile up at the top of the history it pages through. So once more than 50 successful gateway runs have accumulated, the gateway deletes them in one batch — after the response has already been sent, ignoring any errors. Failed gateway runs are kept for troubleshooting, and your other workflows are never touched.
+
+n8n's global pruning (`EXECUTIONS_DATA_PRUNE`, `EXECUTIONS_DATA_MAX_AGE`, `EXECUTIONS_DATA_MAX_COUNT`) can complement this, but it applies to every workflow on the instance, so the gateway doesn't rely on it.
 
 ## Requirements
 

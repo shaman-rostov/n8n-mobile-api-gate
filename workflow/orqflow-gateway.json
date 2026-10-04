@@ -266,6 +266,83 @@
         -608,
         320
       ]
+    },
+    {
+      "parameters": {
+        "url": "={{ ($('⚙️ Config').first().json.instanceUrl || 'http://localhost:5678').replace(/\\/+$/, '') + '/api/v1' + '/executions' }}",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "={{ JSON.stringify({ workflowId: $workflow.id, status: 'success', limit: 100 }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "={{ $('⚙️ Config').first().json.n8nApiKey }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "9f290942-7aba-4cc0-af9b-4732b41885df",
+      "name": "Cleanup: list own runs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        992,
+        576
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Runs after the app already got its answer. Every gateway request is saved as\n// an execution of this workflow; left alone they crowd the head of n8n's history\n// that the app pages through. Prune them in batches once enough piled up.\n// Failed runs are kept for diagnosis. Disabling execution saving instead is not\n// an option: on n8n 2.x it leaves every request stuck as \"running\".\nconst THRESHOLD = 50;\nconst res = $input.first().json;\nconst runs = (res.statusCode < 400 && res.body && Array.isArray(res.body.data)) ? res.body.data : [];\nif (runs.length <= THRESHOLD) return [];\nconst current = String($execution.id);\nreturn runs\n  .filter(r => String(r.id) !== current)\n  .map(r => ({ json: { id: r.id } }));"
+      },
+      "id": "7a81da31-2876-4195-ad5c-10f5a2723307",
+      "name": "Cleanup: pick",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{ ($('⚙️ Config').first().json.instanceUrl || 'http://localhost:5678').replace(/\\/+$/, '') + '/api/v1' + '/executions/' + $json.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "={{ $('⚙️ Config').first().json.n8nApiKey }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "a6027bde-5bd9-453f-afea-9d6eb47fa0fb",
+      "name": "Cleanup: delete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1408,
+        576
+      ]
     }
   ],
   "pinData": {},
@@ -362,6 +439,39 @@
         [
           {
             "node": "Map Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 2xx": {
+      "main": [
+        [
+          {
+            "node": "Cleanup: list own runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup: list own runs": {
+      "main": [
+        [
+          {
+            "node": "Cleanup: pick",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup: pick": {
+      "main": [
+        [
+          {
+            "node": "Cleanup: delete",
             "type": "main",
             "index": 0
           }
