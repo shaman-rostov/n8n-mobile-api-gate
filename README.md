@@ -1,6 +1,13 @@
 # Orqflow Mobile API Gateway
 
-The n8n workflow that powers the [Orqflow iOS app](https://github.com/shaman-rostov/n8n-manager-ios) — a mobile manager for self-hosted n8n automation servers.
+The n8n workflow that powers the [Orqflow iOS app](https://apps.apple.com/cz/app/orqflow/id6810390118) — a mobile manager for self-hosted n8n automation servers.
+
+## Mobile apps
+
+| Platform | App |
+|----------|-----|
+| iOS | [Orqflow on the App Store](https://apps.apple.com/cz/app/orqflow/id6810390118) |
+| Android | Coming soon |
 
 ## How it works
 
