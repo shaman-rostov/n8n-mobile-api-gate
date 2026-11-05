@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const EXPECTED_TOKEN = $json.gatewayToken || 'change-me';\nconst BASE_URL = ($json.instanceUrl || 'http://localhost:5678').replace(/\\/+$/, '') + '/api/v1';\nconst n8nApiKey = $json.n8nApiKey || '';\n\nconst headers = $json.headers || {};\nconst body = $json.body || {};\nconst action = (body.action || '').trim();\nconst params = body.params || {};\nconst apiKey = headers['x-api-key'] || headers['X-API-Key'] || headers['X-api-key'] || '';\n\nif (apiKey !== EXPECTED_TOKEN) {\n  return [{ json: { action_type: 'error', status: 401, success: false, error: 'Unauthorized', message: 'Invalid or missing X-API-Key header' } }];\n}\n\nconst B = BASE_URL;\nfunction cleanQs(obj) {\n  return Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined && v !== null && v !== ''));\n}\n\nconst actionDefs = {\n  list_workflows: () => ({ method: 'GET', url: B + '/workflows', qs: cleanQs({ active: params.active, limit: params.limit || 100, cursor: params.cursor, tags: params.tags }) }),\n  get_workflow: () => ({ method: 'GET', url: B + '/workflows/' + params.workflowId }),\n  create_workflow: () => ({ method: 'POST', url: B + '/workflows', body: params.workflow || {} }),\n  update_workflow: () => ({ method: 'PUT', url: B + '/workflows/' + params.workflowId, body: params.workflow || {} }),\n  delete_workflow: () => ({ method: 'DELETE', url: B + '/workflows/' + params.workflowId }),\n  activate_workflow: () => ({ method: 'POST', url: B + '/workflows/' + params.workflowId + '/activate' }),\n  deactivate_workflow: () => ({ method: 'POST', url: B + '/workflows/' + params.workflowId + '/deactivate' }),\n  list_executions: () => ({ method: 'GET', url: B + '/executions', qs: cleanQs({ workflowId: params.workflowId, status: params.status, limit: params.limit || 20, cursor: params.cursor, includeData: params.includeData }) }),\n  get_execution: () => ({ method: 'GET', url: B + '/executions/' + params.executionId }),\n  delete_execution: () => ({ method: 'DELETE', url: B + '/executions/' + params.executionId }),\n  stop_execution: () => ({ method: 'POST', url: B + '/executions/' + params.executionId + '/stop' }),\n  list_credentials: () => ({ method: 'GET', url: B + '/credentials', qs: cleanQs({ limit: params.limit || 100, cursor: params.cursor }) }),\n  create_credential: () => ({ method: 'POST', url: B + '/credentials', body: params }),\n  delete_credential: () => ({ method: 'DELETE', url: B + '/credentials/' + params.credentialId }),\n  list_variables: () => ({ method: 'GET', url: B + '/variables', qs: cleanQs({ limit: params.limit || 100, cursor: params.cursor }) }),\n  create_variable: () => ({ method: 'POST', url: B + '/variables', body: { key: params.key, value: params.value } }),\n  delete_variable: () => ({ method: 'DELETE', url: B + '/variables/' + params.variableId }),\n  list_tags: () => ({ method: 'GET', url: B + '/tags', qs: cleanQs({ limit: params.limit || 100, cursor: params.cursor }) }),\n  create_tag: () => ({ method: 'POST', url: B + '/tags', body: { name: params.name } }),\n  update_tag: () => ({ method: 'PUT', url: B + '/tags/' + params.tagId, body: { name: params.name } }),\n  delete_tag: () => ({ method: 'DELETE', url: B + '/tags/' + params.tagId }),\n  list_users: () => ({ method: 'GET', url: B + '/users', qs: cleanQs({ limit: params.limit || 100, cursor: params.cursor }) }),\n  generate_audit: () => ({ method: 'POST', url: B + '/audit', body: params.additionalData ? { additionalData: params.additionalData } : {} }),\n  list_projects: () => ({ method: 'GET', url: B + '/projects', qs: cleanQs({ limit: params.limit || 100, cursor: params.cursor }) }),\n  pull_source_control: () => ({ method: 'POST', url: B + '/source-control/pull', body: { force: params.force || false } }),\n  push_source_control: () => ({ method: 'POST', url: B + '/source-control/push', body: { message: params.message || 'Update from mobile app', force: params.force || false } }),\n};\n\nconst allActions = Object.keys(actionDefs).concat(['get_system_info', 'list_endpoints']);\n\nif (action === 'get_system_info') {\n  return [{ json: { action_type: 'system_info' } }];\n}\n\nif (action === 'list_endpoints') {\n  return [{ json: { action_type: 'success', success: true, action: 'list_endpoints', data: { total: allActions.length, endpoints: allActions, categories: { workflows: ['list_workflows','get_workflow','create_workflow','update_workflow','delete_workflow','activate_workflow','deactivate_workflow'], executions: ['list_executions','get_execution','delete_execution','stop_execution'], credentials: ['list_credentials','create_credential','delete_credential'], variables: ['list_variables','create_variable','delete_variable'], tags: ['list_tags','create_tag','update_tag','delete_tag'], users: ['list_users'], audit: ['generate_audit'], projects: ['list_projects'], source_control: ['pull_source_control','push_source_control'], meta: ['get_system_info','list_endpoints'] } } } }];\n}\n\nconst defFn = actionDefs[action];\nif (!defFn) {\n  return [{ json: { action_type: 'error', success: false, status: 400, error: 'Unknown action', message: 'Action \"' + action + '\" not supported. Call list_endpoints for all available actions.', available_actions: allActions } }];\n}\n\nconst cfg = defFn();\nconst bodyData = cfg.body || {};\nconst qsData = cfg.qs || {};\nconst hasBody = Object.keys(bodyData).length > 0;\nconst hasQs = Object.keys(qsData).length > 0;\n\nreturn [{ json: { action_type: 'api_call', action, method: cfg.method, url: cfg.url, bodyData, qsData, hasBody, hasQs, n8nApiKey } }];"
+        "jsCode": "// Authorises the request and turns it into one n8n API call.\n// Fail-closed: a missing, short or placeholder gatewayToken rejects every request,\n// and only the actions listed in ACTIONS can reach the n8n API.\nconst MIN_TOKEN_LENGTH = 32; // `openssl rand -hex 32` gives 64 characters\nconst PLACEHOLDER = /^\\s*(change[\\s_-]?me|replace[\\s_-]?me|your[\\s_-])/i;\nconst MAX_PAGE_SIZE = 250; // n8n API cap\nconst MAX_CURSOR_LENGTH = 4096;\nconst ID = /^[A-Za-z0-9_-]{1,64}$/; // workflow and execution IDs; no dots or slashes, so no path tricks\nconst EXECUTION_STATUSES = ['canceled', 'error', 'running', 'success', 'waiting'];\n\nconst cfg = $json;\nconst headers = cfg.headers || {};\nconst body = cfg.body && typeof cfg.body === 'object' ? cfg.body : {};\n\nconst reply = (status, error, message) =>\n  [{ json: { action_type: 'error', success: false, status, error, message } }];\n\nconst usable = (value) => typeof value === 'string' && value.trim() !== '' && !PLACEHOLDER.test(value);\n\n// Compares every character of the longer string, so the time taken does not reveal\n// how much of a guessed token was right.\nfunction sameSecret(a, b) {\n  let diff = a.length ^ b.length;\n  const n = Math.max(a.length, b.length);\n  for (let i = 0; i < n; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);\n  return diff === 0;\n}\n\n// 1. Gateway configuration and the caller's token, before anything else.\nconst expected = cfg.gatewayToken;\nif (!usable(expected) || expected.trim().length < MIN_TOKEN_LENGTH) {\n  return reply(503, 'Gateway not configured',\n    'Set a unique gatewayToken (at least ' + MIN_TOKEN_LENGTH + ' characters) in the ⚙️ Config node.');\n}\nconst presented = headers['x-api-key'];\nif (typeof presented !== 'string' || !sameSecret(presented, expected.trim())) {\n  return reply(401, 'Unauthorized', 'Invalid or missing X-API-Key header');\n}\n\n// 2. Request shape.\nconst action = typeof body.action === 'string' ? body.action.trim() : '';\nconst params = body.params === undefined ? {} : body.params;\nif (!params || typeof params !== 'object' || Array.isArray(params)) {\n  return reply(400, 'Bad request', '\"params\" must be a JSON object');\n}\n\nclass BadParam extends Error {}\nconst id = (name) => {\n  const v = params[name];\n  const s = typeof v === 'number' && Number.isInteger(v) ? String(v) : v;\n  if (typeof s !== 'string' || !ID.test(s)) throw new BadParam('\"' + name + '\" must be a valid ID');\n  return encodeURIComponent(s);\n};\nconst optional = (name, read) => (params[name] === undefined || params[name] === null ? undefined : read(name));\nconst limit = () => {\n  const v = params.limit;\n  if (!Number.isInteger(v) || v < 1 || v > MAX_PAGE_SIZE) throw new BadParam('\"limit\" must be 1–' + MAX_PAGE_SIZE);\n  return v;\n};\nconst cursor = () => {\n  const v = params.cursor;\n  if (typeof v !== 'string' || v.length > MAX_CURSOR_LENGTH) throw new BadParam('\"cursor\" must be a string');\n  return v;\n};\nconst status = () => {\n  if (!EXECUTION_STATUSES.includes(params.status)) {\n    throw new BadParam('\"status\" must be one of: ' + EXECUTION_STATUSES.join(', '));\n  }\n  return params.status;\n};\n\n// 3. The allowlist: exactly what the Orqflow apps use. Each entry names the params it\n// accepts and builds a request on the fixed API base; anything else is refused.\nconst ACTIONS = {\n  list_endpoints: { category: 'meta', params: [] },\n  get_system_info: { category: 'meta', params: [] },\n  list_workflows: {\n    category: 'workflows', params: ['limit', 'cursor'],\n    request: () => ({ method: 'GET', path: '/workflows',\n      qs: { limit: optional('limit', limit) ?? 100, cursor: optional('cursor', cursor) } }),\n  },\n  get_workflow: {\n    category: 'workflows', params: ['workflowId'],\n    request: () => ({ method: 'GET', path: '/workflows/' + id('workflowId') }),\n  },\n  activate_workflow: {\n    category: 'workflows', params: ['workflowId'],\n    request: () => ({ method: 'POST', path: '/workflows/' + id('workflowId') + '/activate' }),\n  },\n  deactivate_workflow: {\n    category: 'workflows', params: ['workflowId'],\n    request: () => ({ method: 'POST', path: '/workflows/' + id('workflowId') + '/deactivate' }),\n  },\n  list_executions: {\n    category: 'executions', params: ['limit', 'cursor', 'workflowId', 'status'],\n    request: () => ({ method: 'GET', path: '/executions',\n      qs: { limit: optional('limit', limit) ?? 20, cursor: optional('cursor', cursor),\n        workflowId: optional('workflowId', id), status: optional('status', status) } }),\n  },\n  get_execution: {\n    category: 'executions', params: ['executionId'],\n    request: () => ({ method: 'GET', path: '/executions/' + id('executionId') }),\n  },\n  stop_execution: {\n    category: 'executions', params: ['executionId'],\n    request: () => ({ method: 'POST', path: '/executions/' + id('executionId') + '/stop' }),\n  },\n};\n\nif (!Object.prototype.hasOwnProperty.call(ACTIONS, action)) {\n  return reply(400, 'Unknown action', 'Action \"' + action.slice(0, 64) + '\" is not supported. Call list_endpoints for the available actions.');\n}\nconst def = ACTIONS[action];\nconst extra = Object.keys(params).filter((k) => !def.params.includes(k));\nif (extra.length) return reply(400, 'Bad request', 'Unsupported parameter(s) for ' + action + ': ' + extra.join(', ').slice(0, 200));\n\nif (action === 'list_endpoints') {\n  const categories = {};\n  for (const [name, a] of Object.entries(ACTIONS)) (categories[a.category] ||= []).push(name);\n  const endpoints = Object.keys(ACTIONS);\n  return [{ json: { action_type: 'success', success: true, action, data: { total: endpoints.length, endpoints, categories } } }];\n}\nif (action === 'get_system_info') {\n  return [{ json: { action_type: 'success', success: true, action, data: {\n    api_version: 'v1', environment: $execution.mode, workflow_id: $workflow.id, workflow_name: $workflow.name,\n    timestamp: new Date().toISOString() } } }];\n}\n\n// 4. Server side of the call: the n8n API key and address the gateway itself is configured with.\nif (!usable(cfg.n8nApiKey)) {\n  return reply(503, 'Gateway not configured', 'Set n8nApiKey in the ⚙️ Config node.');\n}\n// The Code node sandbox has no URL class; scheme, host and an optional path, nothing else.\nconst instanceUrl = typeof cfg.instanceUrl === 'string' ? cfg.instanceUrl.trim().replace(/\\/+$/, '') : '';\nif (!/^https?:\\/\\/[A-Za-z0-9.-]+(:\\d{1,5})?(\\/[A-Za-z0-9._~-]+)*$/.test(instanceUrl)) {\n  return reply(503, 'Gateway not configured', 'Set instanceUrl in the ⚙️ Config node to an http(s) address of n8n.');\n}\n\nlet req;\ntry {\n  req = def.request();\n} catch (e) {\n  if (e instanceof BadParam) return reply(400, 'Bad request', e.message);\n  throw e;\n}\nconst qs = Object.fromEntries(Object.entries(req.qs || {}).filter(([, v]) => v !== undefined));\nreturn [{ json: { action_type: 'api_call', action, method: req.method,\n  url: instanceUrl + '/api/v1' + req.path, qsData: qs } }];\n"
       },
       "id": "0ecbacd7-72bf-485e-8697-dec53b78f271",
       "name": "Map Action",
@@ -73,30 +73,6 @@
                       "type": "string",
                       "operation": "equals"
                     },
-                    "rightValue": "system_info",
-                    "id": "113eed2a-eadd-414c-bb53-2aff1e085031"
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "system_info"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.action_type }}",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    },
                     "rightValue": "success",
                     "id": "d7ec0538-4c7b-47e5-aeb6-95b6ce65c814"
                   }
@@ -134,20 +110,19 @@
           "parameters": [
             {
               "name": "X-N8N-API-KEY",
-              "value": "={{ $json.n8nApiKey }}"
+              "value": "={{ $('⚙️ Config').first().json.n8nApiKey }}"
             }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.bodyData) }}",
+        "sendBody": false,
         "options": {
           "response": {
             "response": {
               "fullResponse": true,
               "neverError": true
             }
-          }
+          },
+          "timeout": 15000
         }
       },
       "id": "f9137ebc-8708-47a1-a7b5-28ebb757c6ed",
@@ -157,11 +132,12 @@
       "position": [
         160,
         144
-      ]
+      ],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const res = $input.first().json;\nconst req = $('Map Action').first().json;\nconst selfId = $workflow.id;\n\n// fullResponse: { statusCode, body, headers }. neverError keeps 4xx/5xx on this path,\n// so the status code is the only reliable error signal.\nconst status = Number(res.statusCode) || 200;\nconst body = res.body !== undefined ? res.body : res;\n\nif (status >= 400) {\n  // n8n answers a bad API key with a bare \"unauthorized\", which in the app reads\n  // like a wrong gateway token. Say which key is at fault.\n  const msg = status === 401\n    ? 'The n8n API key in the ⚙️ Config node is invalid or expired (n8n API returned 401).'\n    : (body && typeof body === 'object' && (body.message || body.error))\n      || (typeof body === 'string' && body)\n      || ('n8n API returned HTTP ' + status);\n  return [{ json: { success: false, action: req.action, httpStatus: status, message: msg } }];\n}\n\n// List responses: { data: [...], nextCursor } -> { items, total, nextCursor }.\n// The gateway hides itself: it is plumbing, and its own in-flight execution\n// would otherwise always show up as \"running\".\nlet data = body;\nif (body && Array.isArray(body.data)) {\n  let items = body.data;\n  if (req.action === 'list_workflows') items = items.filter(w => w.id !== selfId);\n  if (req.action === 'list_executions') items = items.filter(e => e.workflowId !== selfId);\n  data = { items, total: items.length, nextCursor: body.nextCursor || null };\n}\n\nreturn [{ json: { success: true, action: req.action, data } }];"
+        "jsCode": "const res = $input.first().json;\nconst req = $('Map Action').first().json;\nconst selfId = $workflow.id;\n\n// The request node continues on failure: no status code means n8n was not reached\n// (wrong instanceUrl, DNS, TLS, timeout). The cause stays in this execution, not in the reply.\nif (res.statusCode === undefined) {\n  return [{ json: { success: false, action: req.action, httpStatus: 502,\n    message: 'The gateway could not reach the n8n API. Check instanceUrl in the ⚙️ Config node.' } }];\n}\n\n// fullResponse: { statusCode, body, headers }. neverError keeps 4xx/5xx on this path,\n// so the status code is the only reliable error signal.\nconst status = Number(res.statusCode);\nconst body = res.body;\n\nif (status >= 400) {\n  // n8n answers a bad API key with a bare \"unauthorized\", which in the app reads\n  // like a wrong gateway token. Say which key is at fault; 403 is a missing API key scope.\n  const msg = status === 401\n    ? 'The n8n API key in the ⚙️ Config node is invalid or expired (n8n API returned 401).'\n    : status === 403\n      ? 'The n8n API key in the ⚙️ Config node lacks the scope for \"' + req.action + '\" (n8n API returned 403).'\n      : (body && typeof body === 'object' && (body.message || body.error))\n        || (typeof body === 'string' && body)\n        || ('n8n API returned HTTP ' + status);\n  return [{ json: { success: false, action: req.action, httpStatus: status, message: msg } }];\n}\n\n// List responses: { data: [...], nextCursor } -> { items, total, nextCursor }.\n// The gateway hides itself: it is plumbing, and its own in-flight execution\n// would otherwise always show up as \"running\".\nlet data = body;\nif (body && Array.isArray(body.data)) {\n  let items = body.data;\n  if (req.action === 'list_workflows') items = items.filter(w => w.id !== selfId);\n  if (req.action === 'list_executions') items = items.filter(e => e.workflowId !== selfId);\n  data = { items, total: items.length, nextCursor: body.nextCursor || null };\n}\n\nreturn [{ json: { success: true, action: req.action, data } }];\n"
       },
       "id": "004e2ecf-1288-4bf7-aa09-c1bda75e2d99",
       "name": "Format Response",
@@ -170,19 +146,6 @@
       "position": [
         336,
         144
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "return [{ json: { success: true, action: 'get_system_info', data: { instance_url: ($('⚙️ Config').first().json.instanceUrl || 'http://localhost:5678').replace(/\\/+$/, ''), api_base: ($('⚙️ Config').first().json.instanceUrl || 'http://localhost:5678').replace(/\\/+$/, '') + '/api/v1', api_version: 'v1', timestamp: new Date().toISOString(), environment: $execution.mode, workflow_id: $workflow.id, workflow_name: $workflow.name, execution_id: $execution.id, total_endpoints: 29 } } }];"
-      },
-      "id": "410c91aa-42ea-4736-b011-020fe30debbd",
-      "name": "System Info Builder",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        160,
-        288
       ]
     },
     {
@@ -238,13 +201,13 @@
             {
               "id": "cfg-gateway-token",
               "name": "gatewayToken",
-              "value": "CHANGE_ME — run: openssl rand -hex 32",
+              "value": "CHANGE_ME: run openssl rand -hex 32",
               "type": "string"
             },
             {
               "id": "cfg-n8n-api-key",
               "name": "n8nApiKey",
-              "value": "CHANGE_ME — n8n Settings → API → Create API key",
+              "value": "CHANGE_ME: n8n Settings → n8n API → Create an API key",
               "type": "string"
             },
             {
@@ -299,7 +262,8 @@
         992,
         576
       ],
-      "executeOnce": true
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -342,7 +306,8 @@
       "position": [
         1408,
         576
-      ]
+      ],
+      "onError": "continueRegularOutput"
     }
   ],
   "pinData": {},
@@ -363,13 +328,6 @@
         [
           {
             "node": "n8n REST API",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "System Info Builder",
             "type": "main",
             "index": 0
           }
@@ -402,17 +360,6 @@
       ]
     },
     "Format Response": {
-      "main": [
-        [
-          {
-            "node": "Respond 2xx",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "System Info Builder": {
       "main": [
         [
           {
@@ -482,13 +429,10 @@
   "active": false,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate",
-    "availableInMCP": true
+    "binaryMode": "separate"
   },
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "aiBuilderAssisted": true,
-    "builderVariant": "mcp"
+    "templateCredsSetupCompleted": true
   },
   "nodeGroups": [],
   "tags": []
