@@ -7,12 +7,13 @@
 <h1 align="center">Orqflow Mobile API Gateway</h1>
 
 <p align="center">
-  Open-source n8n workflow that securely connects your own n8n instance to the Orqflow iOS app.
+  Open-source n8n workflow that securely connects your own n8n instance to the Orqflow app for iPhone and Android.
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <a href="https://apps.apple.com/app/id6810390118"><img src="https://img.shields.io/badge/iOS-App%20Store-black?logo=apple" alt="Orqflow on the App Store"></a>
+  <a href="https://github.com/shaman-rostov/n8n-mobile-api-gate/releases/tag/android-v1.0.2"><img src="https://img.shields.io/badge/Android-APK-3DDC84?logo=android&logoColor=white" alt="Orqflow for Android APK"></a>
   <img src="https://img.shields.io/badge/n8n-tested%20on%202.43-EA4B71" alt="Tested on n8n 2.43">
 </p>
 
@@ -20,7 +21,7 @@
 
 ## What is Orqflow?
 
-**Orqflow** is an iPhone app for keeping an eye on your n8n automations: see your workflows, switch them
+**Orqflow** is an iPhone and Android app for keeping an eye on your n8n automations: see your workflows, switch them
 on or off, follow executions and stop one that is stuck — without opening a browser.
 
 **The Mobile API Gateway** (this repository) is the other half. It is a single n8n workflow you import into
@@ -32,7 +33,17 @@ Orqflow is an independent app. It is not affiliated with, endorsed or sponsored 
 | Platform | Status |
 |---|---|
 | iOS (iPhone, iOS 16 or later) | [Available on the App Store](https://apps.apple.com/app/id6810390118), free |
-| Android | In testing, not yet publicly available |
+| Android (8.0 or later) | [APK in Releases](https://github.com/shaman-rostov/n8n-mobile-api-gate/releases/tag/android-v1.0.2), free; Google Play in testing |
+
+### Installing on Android
+
+1. Open the [latest Android release](https://github.com/shaman-rostov/n8n-mobile-api-gate/releases/tag/android-v1.0.2) on your phone and download the `orqflow-….apk` file.
+2. Open it and allow installing apps from this source when Android asks.
+3. Set up the gateway below, then connect the app ([step 8](#8-connect-the-app)).
+
+The APK is signed with a different key from the Google Play build, so one can't update the other:
+uninstall the installed version before switching. Android releases are tagged `android-v…`; gateway
+releases are tagged `v…`.
 
 ## Features
 
@@ -285,7 +296,8 @@ Not tested. The gateway needs the n8n public API and an API key; if your n8n Clo
 should work in principle, but this has not been verified.
 
 **Is the gateway free?**
-Yes. It is open source under the MIT licence. The iOS app is free on the App Store.
+Yes. It is open source under the MIT licence. The app is free: on the App Store for iPhone, and as an APK in
+[Releases](https://github.com/shaman-rostov/n8n-mobile-api-gate/releases) for Android.
 
 **Where is my n8n API key stored?**
 Only in the ⚙️ Config node of the gateway workflow, on your server. The app never receives it.
@@ -310,6 +322,6 @@ For security issues, see [SECURITY.md](SECURITY.md).
 ## License and support
 
 - Licence: [MIT](LICENSE)
-- App: [Orqflow on the App Store](https://apps.apple.com/app/id6810390118)
+- App: [Orqflow on the App Store](https://apps.apple.com/app/id6810390118), [Orqflow for Android (APK)](https://github.com/shaman-rostov/n8n-mobile-api-gate/releases/tag/android-v1.0.2)
 - Privacy policy: [privacy-policy.md](privacy-policy.md)
 - Support and bug reports: [GitHub issues](https://github.com/shaman-rostov/n8n-mobile-api-gate/issues)
