@@ -7,7 +7,7 @@
 <h1 align="center">Orqflow Mobile API Gateway</h1>
 
 <p align="center">
-  Open-source n8n workflow that securely connects your own n8n instance to the Orqflow app for iPhone and Android.
+  Open-source n8n workflow that securely connects your own n8n instance to the <a href="https://shinkarenko.eu/projects/orqflow/">Orqflow</a> app for iPhone and Android.
 </p>
 
 <p align="center">
